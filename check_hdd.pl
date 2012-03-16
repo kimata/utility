@@ -1,9 +1,11 @@
 #!/usr/bin/env perl
 
-# Identify which file is broken when ATA error occured.
+# Identify which file is broken based on ATA error occurrence.
 #
 # USAGE:
-# ./check_hdd.pl PATH
+# $ ./check_hdd.pl PATH
+#
+# After finished the command, see `check_hdd.error'.
 
 use strict;
 use warnings;
