@@ -39,9 +39,9 @@ sub get_last_ata_dmesg
     my @dmesg = reverse(split(m|\n|, `dmesg | tail -n 100`));
 
     foreach my $line (@dmesg) {
-    next unless $line =~ m|${\(DMESG_ERROR_REGEX)}|;
-    chomp $line;
-    return $line;
+        next unless $line =~ m|${\(DMESG_ERROR_REGEX)}|;
+        chomp $line;
+        return $line;
     }
     return '';
 }
@@ -49,18 +49,18 @@ sub get_last_ata_dmesg
 sub create_error_monitor {
     my $last_error = get_last_ata_dmesg();
     return {
-    check => sub {
-        my $message = shift;
-        my $new_error = get_last_ata_dmesg();
+        check => sub {
+            my $message = shift;
+            my $new_error = get_last_ata_dmesg();
 
-        if ($new_error ne $last_error) {
-        ERROR(sprintf('ERROR: %s (%s)', $message, $new_error));
-        $last_error = $new_error;
-        return 1;
-        } else {
-        return 0;
+            if ($new_error ne $last_error) {
+                ERROR(sprintf('ERROR: %s (%s)', $message, $new_error));
+                $last_error = $new_error;
+                return 1;
+            } else {
+                return 0;
+            }
         }
-    }
     };
 }
 
@@ -72,16 +72,16 @@ sub get_dir_list
     my $error_monitor = create_error_monitor();
     my @dir_list;
     foreach my $path (@{$path_list}) {
-    my @dir = File::Find::Rule->directory->maxdepth($depth)
-        ->extras({ follow => 0 })->in($path);
-    $error_monitor->{check}->($path);
-    push(@dir_list, @dir);
+        my @dir = File::Find::Rule->directory->maxdepth($depth)
+            ->extras({ follow => 0 })->in($path);
+        $error_monitor->{check}->($path);
+        push(@dir_list, @dir);
     }
 
     my @filtered;
     foreach my $dir_path (@dir_list) {
-    push(@filtered, $dir_path)
-        if (scalar(grep(m|^$dir_path/|, @dir_list)) == 0);
+        push(@filtered, $dir_path)
+            if (scalar(grep(m|^$dir_path/|, @dir_list)) == 0);
     }
     return [sort @filtered];
 }
@@ -89,24 +89,28 @@ sub get_dir_list
 sub check_dir
 {
     my $dir_path = shift;
+    my $max_depth = shift;
     my $error_monitor = create_error_monitor();
 
-    my @file_list = File::Find::Rule->file->extras({ follow => 0 })->in($dir_path);
+    my $rule = File::Find::Rule->file->extras({ follow => 0 });
+    $rule->maxdepth($max_depth) if $max_depth;
+
+    my @file_list = $rule->in($dir_path);
     $error_monitor->{check}->($dir_path);
 
     foreach my $file_path (@file_list) {
-    my $buf;
-    open(FILE, $file_path) or die $!;
-    while (read(FILE, $buf, READ_BLOCK_SIZE) != 0) {
-        Time::HiRes::sleep(0.1);
-        my $is_error = $error_monitor->{check}->($file_path);
-        last if $is_error;
-    }
-    close(FILE);
+        my $buf;
+        open(FILE, $file_path) or die $!;
+        while (read(FILE, $buf, READ_BLOCK_SIZE) != 0) {
+            Time::HiRes::sleep(0.1);
+            my $is_error = $error_monitor->{check}->($file_path);
+            last if $is_error;
+        }
+        close(FILE);
     }
 }
 
-sub exec_check 
+sub exec_check
 {
     my $path_list = shift;
     my $depth = shift;
@@ -120,12 +124,15 @@ sub exec_check
     local $| = 1;
 
     foreach my $i (0..($dir_count-1)) {
-    my $dir_path = $dir_list->[$i];
+        my $dir_path = $dir_list->[$i];
 
-    printf "Processing: %-75s\n", $dir_path;
-    print $progress->report("%40b $i/$dir_count (%p), eta: %E min\r", $i + 1);
+        printf "Processing: %-75s\n", $dir_path;
+        print $progress->report("%40b $i/$dir_count (%p), eta: %E min\r", $i + 1);
 
-    check_dir($dir_path);
+        check_dir($dir_path);
+    }
+    foreach my $dir_path (@{$path_list}) {
+        check_dir($dir_path, $depth);
     }
     print $progress->report("%40b $dir_count/$dir_count (%p), eta: %E min\r", $dir_count);
     $progress->stop;
