@@ -4,7 +4,7 @@
 # This script executes two tasks.
 # 1. adjust photo directory structure as below
 #     +- YYMMDD_title (*.jpg files)
-#     |  +- raw (*.crs files)
+#     |  +- raw (*.cr2 files)
 #    +- YYMMDD_title
 #     |  + raw
 #     :
