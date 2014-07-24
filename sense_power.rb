@@ -13,6 +13,11 @@ class CharacterLCD
     exec_cmd("i2cset -y 1 0x3e 0 0x39 0x14 0x78 0x5E 0x6c i")
     # display ON
     exec_cmd("i2cset -y 1 0x3e 0 0x0C 0x06 i")
+    # contrast set
+    exec_cmd("i2cset -y 1 0x3e 0 0x39 i")
+    exec_cmd("i2cset -y 1 0x3e 0 0x72 i")
+    # set instruction table 0
+    exec_cmd("i2cset -y 1 0x3e 0 0x38 i")
     clear
   end
 
