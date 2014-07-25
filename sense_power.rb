@@ -81,13 +81,13 @@ class PowerSenseor
   end
 
   def calc_voltage(v_val)
-    v = [v_val.gsub(/0x(\w{4})\n/, '\1')].pack('H*').unpack('s')[0]
+    v = [v_val.gsub(/0x(\w{4})\n/, '\1')].pack('H*').unpack('s')[0].abs
     v = v * 1.25 / 1000.0
     return v
   end
 
   def calc_current(c_val)
-    c = [c_val.gsub(/0x(\w{4})\n/, '\1')].pack('H*').unpack('s')[0]
+    c = [c_val.gsub(/0x(\w{4})\n/, '\1')].pack('H*').unpack('s')[0].abs
     c = c / 1000.0
     return c
   end
@@ -100,7 +100,12 @@ class PowerSenseor
 end
 
 def get_ip_addr
-  return `LC_ALL=C ifconfig eth0 | grep 'inet addr:' | sed -e 's/^.*inet addr://' -e 's/ .*//'`.chomp
+  ip_addr=`LC_ALL=C ifconfig eth0 | grep 'inet addr:'`.chomp
+  if ip_addr.match(%r|inet addr:(\d+\.\d+\.\d+\.\d+)|)
+    return $1
+  else
+    return 'UNKNOWN'
+  end
 end
 
 
@@ -122,15 +127,16 @@ Signal.trap(:INT){
 sensor = PowerSenseor.new
 lcd = CharacterLCD.new
 
-
-lcd.set_cursor(40)
-lcd.display(get_ip_addr)
-5.times{|i|
-  lcd.set_cursor(0)
-  lcd.display(sprintf('IP: %-5s', '#' * (5-i)));
-  sleep(1)
-}
-lcd.clear
+if !params['l']
+  lcd.set_cursor(40)
+  lcd.display(get_ip_addr)
+  5.times{|i|
+    lcd.set_cursor(0)
+    lcd.display(sprintf('IP: %-5s', '#' * (5-i)));
+    sleep(1)
+  }
+  lcd.clear
+end
 
 start_time = Time.now
 i = 0
