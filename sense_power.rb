@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 # -*- coding: utf-8 -*-
 
+IOCTL_I2C_SLAVE = 0x0703
+
 # Script for power meter using the following parts
 # - Power Meter module (IC: INA226)
 #   https://strawberry-linux.com/catalog/items?code=12031
@@ -8,7 +10,10 @@
 #   https://strawberry-linux.com/catalog/items?code=27001
 
 class CharacterLCD
-  def initialize
+  def initialize(i2c_bus=1, dev_addr=0x3E)
+    @i2c = File.open(sprintf('/dev/i2c-%d', i2c_bus), 'rb+')
+    @i2c.ioctl(IOCTL_I2C_SLAVE, dev_addr)
+
     # initialize
     exec_cmd("i2cset -y 1 0x3e 0 0x39 0x14 0x78 0x5E 0x6c i")
     # display ON
@@ -28,12 +33,14 @@ class CharacterLCD
   end
 
   def display(text)
-    exec_cmd("i2cset -y 1 0x3e 0x40 #{text.unpack('C*').join(' ')} i")
+    @i2c.write("\x40" + text)
+    @i2c.flush
   end
 
   def set_cursor(pos)
     # set cursor position
-    exec_cmd("i2cset -y 1 0x3e 0 0x#{(0x80 | pos).to_s(16)}")
+    @i2c.write("\x00" + [(0x80 | pos)].pack('C'))
+    @i2c.flush
   end
 
   def exec_cmd(cmd)
@@ -44,7 +51,10 @@ class CharacterLCD
 end
 
 class PowerSenseor
-  def initialize(dev_addr=0x40)
+  def initialize(i2c_bus=1, dev_addr=0x40)
+    @i2c = File.open(sprintf('/dev/i2c-%d', i2c_bus), 'rb+')
+    @i2c.ioctl(IOCTL_I2C_SLAVE, dev_addr)
+
     @dev_addr = dev_addr
     @v_val = 0
     @c_val = 0
@@ -57,9 +67,14 @@ class PowerSenseor
   end
 
   def sense
-    @v_val=exec_cmd("i2cget -y 1 0x#{@dev_addr.to_s(16)} 0x02 w")
-    @c_val=exec_cmd("i2cget -y 1 0x#{@dev_addr.to_s(16)} 0x04 w")
-    @p_val=exec_cmd("i2cget -y 1 0x#{@dev_addr.to_s(16)} 0x03 w")
+    @i2c.write(0x02)
+    @v_val = @i2c.read(2).unpack('n')[0]
+
+    @i2c.write(0x04)
+    @c_val = @i2c.read(2).unpack('n')[0]
+
+    @i2c.write(0x03)
+    @p_val = @i2c.read(2).unpack('n')[0]
   end
 
   def get_voltage
@@ -81,21 +96,15 @@ class PowerSenseor
   end
 
   def calc_voltage(v_val)
-    v = [v_val.gsub(/0x(\w{4})\n/, '\1')].pack('H*').unpack('s')[0].abs
-    v = v * 1.25 / 1000.0
-    return v
+    return v_val.abs * 1.25 / 1000.0
   end
 
   def calc_current(c_val)
-    c = [c_val.gsub(/0x(\w{4})\n/, '\1')].pack('H*').unpack('s')[0].abs
-    c = c / 1000.0
-    return c
+    return c_val.abs / 1000.0
   end
 
   def calc_power(p_val)
-    p = [p_val.gsub(/0x(\w{4})\n/, '\1')].pack('H*').unpack('s')[0]
-    p = p * 0.025
-    return p
+    return p_val * 0.025
   end
 end
 
@@ -110,7 +119,7 @@ end
 
 
 require 'optparse'
-params = ARGV.getopts('l')
+params = ARGV.getopts('lq')
 
 data_list = []
 
@@ -127,7 +136,7 @@ Signal.trap(:INT){
 sensor = PowerSenseor.new
 lcd = CharacterLCD.new
 
-if !params['l']
+if !params['l'] && !params['q']
   lcd.set_cursor(40)
   lcd.display(get_ip_addr)
   5.times{|i|
@@ -151,13 +160,14 @@ while true
     data_list.push([(Time.now - start_time) * 1000, v, c, p])
   end
 
-  if ((i & 0x1F) == 0) then
+  if ((i & 0x7F) == 0) then
     lcd.set_cursor(0)
     lcd.display(sprintf("%.3fV, %.3fA", v, c))
     lcd.set_cursor(40)
     lcd.display(sprintf("%.3fW", p))
-    lcd.display(((i & 0x20) == 0x20) ? [0x5F].pack('C') : ' ')
+    lcd.display(((i & 0x80) == 0x80) ? [0x5F].pack('C') : ' ')
     lcd.set_cursor(0)
   end
   i = (i & 0xff) + 1
+  sleep 0.001
 end
