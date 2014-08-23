@@ -68,13 +68,18 @@ class PowerSenseor
 
   def sense
     @i2c.write(0x02)
-    @v_val = @i2c.read(2).unpack('n')[0]
+    @v_val = conver_signed(@i2c.read(2))
 
     @i2c.write(0x04)
-    @c_val = @i2c.read(2).unpack('n')[0]
+    @c_val = conver_signed(@i2c.read(2))
 
     @i2c.write(0x03)
-    @p_val = @i2c.read(2).unpack('n')[0]
+    @p_val = conver_signed(@i2c.read(2))
+  end
+
+  def conver_signed(bytes)
+    # convert endian
+    return bytes.unpack('n').pack('S').unpack('s')[0].abs
   end
 
   def get_voltage
@@ -96,11 +101,11 @@ class PowerSenseor
   end
 
   def calc_voltage(v_val)
-    return v_val.abs * 1.25 / 1000.0
+    return v_val * 1.25 / 1000.0
   end
 
   def calc_current(c_val)
-    return c_val.abs / 1000.0
+    return c_val / 1000.0
   end
 
   def calc_power(p_val)
@@ -109,14 +114,15 @@ class PowerSenseor
 end
 
 def get_ip_addr
-  ip_addr=`LC_ALL=C ifconfig eth0 | grep 'inet addr:'`.chomp
-  if ip_addr.match(%r|inet addr:(\d+\.\d+\.\d+\.\d+)|)
-    return $1
-  else
-    return 'UNKNOWN'
-  end
+  iface_list = %w(wlan0 eth0)
+  iface_list.each{|iface|
+    ip_addr=`LC_ALL=C ifconfig #{iface} | grep 'inet addr:'`.chomp
+    if ip_addr.match(%r|inet addr:(\d+\.\d+\.\d+\.\d+)|)
+      return $1
+    end
+  }
+  return 'UNKNOWN'
 end
-
 
 require 'optparse'
 params = ARGV.getopts('lq')
@@ -125,9 +131,9 @@ data_list = []
 
 Signal.trap(:INT){
   if params['l'] then
-    printf("time\tvoltage\tcurrent\tpower\n")
+    printf("time,voltage,current,power\n")
     data_list.each{|data|
-      printf("%10d\t%.3f\t%.3f\t%.3f\n", data[0], data[1], data[2], data[3])
+      printf("%10d,%.3f,%.3f,%.3f\n", data[0], data[1], data[2], data[3])
     }
   end
   exit(0)
@@ -162,12 +168,13 @@ while true
 
   if ((i & 0x7F) == 0) then
     lcd.set_cursor(0)
-    lcd.display(sprintf("%.3fV, %.3fA", v, c))
+    lcd.display(sprintf("%6.3fV %6.3fA", v, c))
     lcd.set_cursor(40)
-    lcd.display(sprintf("%.3fW", p))
+    lcd.display(sprintf("%6.3fW", p))
     lcd.display(((i & 0x80) == 0x80) ? [0x5F].pack('C') : ' ')
     lcd.set_cursor(0)
+  else
+    sleep 0.001    
   end
   i = (i & 0xff) + 1
-  sleep 0.001
 end
