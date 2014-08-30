@@ -6,10 +6,10 @@ require 'capybara'
 require 'capybara/poltergeist'
 require 'nokogiri'
 
-DATA_FILE_PATH  = '/home/kimata/var/amaten.csv'
+DATA_FILE_PATH  = '/storage/misc/amaten.csv'
 AMATEN_URL      = 'https://amaten.jp/exhibitions/index'
 TARGET_PRICE    = 10000
-INTERVAL        = 30 * 60 # 30minute
+INTERVAL        = 30 * 60 # 30minutes
 
 def fetch_price_list(url)
   Capybara.register_driver :poltergeist do |app|
@@ -48,6 +48,7 @@ File.open(DATA_FILE_PATH, 'a') {|f|
     end
 
     f.printf("%s, %.1f\n", Time.now.strftime("%Y/%m/%d %H:%M"), price[:rate])
+    f.flush
 
     sleep INTERVAL
   end
