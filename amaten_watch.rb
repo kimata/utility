@@ -8,14 +8,10 @@ require 'nokogiri'
 
 DATA_FILE_PATH  = '/storage/misc/amaten.csv'
 AMATEN_URL      = 'https://amaten.jp/exhibitions/index'
-TARGET_PRICE    = 10000
-INTERVAL        = 30 * 60 # 30minutes
+TARGET_PRICE    = 5000
+INTERVAL        = 5 * 60 # 5 minutes
 
 def fetch_price_list(url)
-  Capybara.register_driver :poltergeist do |app|
-    Capybara::Poltergeist::Driver.new(app, {:js_errors => false, :timeout => 1000 })
-  end
-
   Capybara.default_selector = :xpath
   session = Capybara::Session.new(:poltergeist)
   session.driver.headers = {
@@ -37,18 +33,23 @@ def fetch_price_list(url)
   return price_list
 end
 
+Capybara.register_driver :poltergeist do |app|
+  Capybara::Poltergeist::Driver.new(app,
+                                    { :js_errors => false,
+                                      :timeout => 1000,
+                                      :phantomjs_options => ['--ssl-protocol=tlsv1'] })
+end
+
+
 File.open(DATA_FILE_PATH, 'a') {|f|
   loop do
     price_list = fetch_price_list(AMATEN_URL)
-    price = price_list.find{|price| price[:value] == TARGET_PRICE }
+    price = price_list.find{|price| price[:value] >= TARGET_PRICE }
 
-    if price == nil
-      sleep INTERVAL / 10
-      next
+    if price != nil
+      f.printf("%s, %.1f\n", Time.now.strftime("%Y/%m/%d %H:%M"), price[:rate])
+      f.flush
     end
-
-    f.printf("%s, %.1f\n", Time.now.strftime("%Y/%m/%d %H:%M"), price[:rate])
-    f.flush
 
     sleep INTERVAL
   end
