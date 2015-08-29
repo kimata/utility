@@ -55,6 +55,6 @@ function scan_and_encode {
 }
 
 scan_and_encode
-while inotifywait -e close_write.moved_to ${QUEUE_PATH} &>/dev/null; do
+while inotifywait -e close_write,moved_to ${QUEUE_PATH} &>/dev/null; do
     scan_and_encode
 done
